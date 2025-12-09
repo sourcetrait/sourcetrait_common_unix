@@ -80,27 +80,3 @@ https://github.com/sourcetrait
 [Linkable]: #Linking-Exception-Section-7
 [Linkable Badge]: https://img.shields.io/badge/linkable-yes-green.svg
 
-[ChronoX Crate]: https://crates.io/crates/sourcetrait_chronox
-[ChronoX Crate Badge]: https://img.shields.io/crates/v/sourcetrait_chronox.svg
-[ChronoX Docs]: https://docs.rs/sourcetrait_chronox
-
-[RonX Crate]: https://crates.io/crates/sourcetrait_ronx
-[RonX Crate Badge]: https://img.shields.io/crates/v/sourcetrait_ronx.svg
-[RonX Docs]: https://docs.rs/sourcetrait_ronx
-
-[StdX Crate]: https://crates.io/crates/sourcetrait_stdx
-[StdX Crate Badge]: https://img.shields.io/crates/v/sourcetrait_stdx.svg
-[StdX Docs]: https://docs.rs/sourcetrait_stdx
-
-[TomlX Crate]: https://crates.io/crates/sourcetrait_tomlx
-[TomlX Crate Badge]: https://img.shields.io/crates/v/sourcetrait_tomlx.svg
-[TomlX Docs]: https://docs.rs/sourcetrait_tomlx
-
-[Tooling Crate]: https://crates.io/crates/sourcetrait_tooling
-[Tooling Crate Badge]: https://img.shields.io/crates/v/sourcetrait_tooling.svg
-[Tooling Docs]: https://docs.rs/sourcetrait_tooling
-
-[Testing Crate]: https://crates.io/crates/sourcetrait_testing
-[Testing Crate Badge]: https://img.shields.io/crates/v/sourcetrait_testing.svg
-[Testing Docs]: https://docs.rs/sourcetrait_testing
-
