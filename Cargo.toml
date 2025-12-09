@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sourcetrait_cstd",
+]
+
+[workspace.dependencies]
+libc = "0.2"
+snafu = "0.8"
+sourcetrait_stdx = "1"
+strum = { version = "0.27", features = ["derive"] }
+
+[workspace.dependencies.sourcetrait_testing] 
+path = "../sourcetrait_common/crates/sourcetrait_testing"
+
+[workspace.dependencies.sourcetrait_twostr] 
+path = "../sourcetrait_common/crates/sourcetrait_twostr"
