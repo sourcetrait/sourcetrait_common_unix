@@ -1,20 +1,22 @@
 use crate::*;
 
-fn user_from_passwd(user_ptr: *mut libc::passwd) -> CStdResult<CStdUser> {
+fn user_from_passwd(user_ptr: *mut libc::passwd) -> CstdResult<UserCstd> {
     let username;
     let uid;
     unsafe {
-        username = CString::from(CStr::from_ptr((*user_ptr).pw_name));
+        username = CStr::from_ptr((*user_ptr).pw_name);
         uid = (*user_ptr).pw_uid;
     }
     
-    Ok(CStdUser {
+    let username = TwoString::try_from_ffi_cstr(username)?;
+    
+    Ok(UserCstd {
         username,
         uid,
     })
 }
 
-pub fn cstd_lookup_user(uid: UID) -> Result<Option<User>> {
+pub fn cstd_lookup_user(uid: UID) -> CstdResult<Option<UserCstd>> {
     let user = unsafe {
         let user_ptr = ::libc::getpwuid(uid);
         if user_ptr.is_null() {
@@ -27,7 +29,7 @@ pub fn cstd_lookup_user(uid: UID) -> Result<Option<User>> {
     Ok(Some(user))
 }
 
-pub(crate) fn libc_lookup_username(username: PlatStr<'_>) -> CrossResult<Option<User>> {
+pub fn cstd_lookup_username(username: TwoStr<'_>) -> CstdResult<Option<UserCstd>> {
     let user = unsafe {
         let username_cstr = CString::try_from(username)?;
         let user_ptr = ::libc::getpwnam(username_cstr.as_ptr());
@@ -36,30 +38,28 @@ pub(crate) fn libc_lookup_username(username: PlatStr<'_>) -> CrossResult<Option<
         }
         
         user_from_passwd(user_ptr)
-    };
+    }?;
     
     Ok(Some(user))
 }
 
-fn new_group(group_ptr: *mut libc::group) -> Group {
+fn new_group(group_ptr: *mut libc::group) -> CstdResult<UserGroupCstd> {
     let gid;
-    let name;
+    let groupname;
     unsafe {
         gid = (*group_ptr).gr_gid;
-        name = PlatString::from(CStr::from_ptr((*group_ptr).gr_name));
+        groupname = CStr::from_ptr((*group_ptr).gr_name);
     }
     
-    Group {
-        ident: AccessIdent {
-            name,
-            domain: Capable::Incapable,
-            id: Capable::Capable(gid),
-            sid: Capable::Incapable,
-        },
-    }
+    let groupname = TwoString::try_from_ffi_cstr(groupname)?;
+    
+    Ok(UserGroupCstd {
+        groupname,
+        gid,
+    })
 }
 
-pub(crate) fn libc_lookup_group(gid: GID) -> CrossResult<Option<Group>> {
+pub fn cstd_lookup_group(gid: GID) -> CstdResult<Option<UserGroupCstd>> {
     let group = unsafe {
         let group_ptr = libc::getgrgid(gid);
         if group_ptr.is_null() {
@@ -67,12 +67,12 @@ pub(crate) fn libc_lookup_group(gid: GID) -> CrossResult<Option<Group>> {
         }
         
         new_group(group_ptr)
-    };
+    }?;
     
     Ok(Some(group))
 }
 
-pub(crate) fn libc_lookup_groupname(groupname: PlatStr<'_>) -> CrossResult<Option<Group>> {
+pub fn cstd_lookup_groupname(groupname: TwoStr<'_>) -> CstdResult<Option<UserGroupCstd>> {
     let group = unsafe {
         let groupname_cstr = CString::try_from(groupname)?;
         let group_ptr = libc::getgrnam(groupname_cstr.as_ptr());
@@ -81,27 +81,27 @@ pub(crate) fn libc_lookup_groupname(groupname: PlatStr<'_>) -> CrossResult<Optio
         }
         
         new_group(group_ptr)
-    };
+    }?;
     
     Ok(Some(group))
 }
 
-pub(crate) fn libc_lookup_user_primary_group(uid: UID) -> CrossResult<Group> {
+pub fn cstd_lookup_user_primary_group(uid: UID) -> CstdResult<UserGroupCstd> {
     let primary_gid = unsafe {
         let passwd_ptr = libc::getpwuid(uid);
         if passwd_ptr.is_null() {
-            return CrossError::err_not_found(ErrNoun::User);
+            return CstdError::err_not_found(CstdEr::User);
         }
         
         (*passwd_ptr).pw_gid
     };
     
-    libc_lookup_group(primary_gid)?
-        .ok_or_else(|| CrossError::not_found(ErrNoun::UserGroup))
+    cstd_lookup_group(primary_gid)?
+        .ok_or_else(|| CstdError::not_found(CstdEr::UserGroup))
     
 }
 
-pub(crate) fn libc_lookup_username_secondary_groups(username: PlatStr<'_>) -> CrossResult<HashSet<Group>> {
+pub fn cstd_lookup_username_secondary_groups(username: TwoStr<'_>) -> CstdResult<HashSet<UserGroupCstd>> {
     let mut groups = HashSet::new();
     let username_cstring = CString::try_from(username)?;
     let username_cstr = username_cstring.as_c_str();
@@ -131,7 +131,7 @@ pub(crate) fn libc_lookup_username_secondary_groups(username: PlatStr<'_>) -> Cr
                 };
                 
                 if found {
-                    let group = new_group(group_ptr);
+                    let group = new_group(group_ptr)?;
                     groups.insert(group);
                 }
             }
@@ -142,7 +142,7 @@ pub(crate) fn libc_lookup_username_secondary_groups(username: PlatStr<'_>) -> Cr
     Ok(groups)
 }
 
-pub(crate) fn libc_lookup_group_primary_users(gid: GID) -> CrossResult<HashSet<User>> {
+pub fn cstd_lookup_group_primary_users(gid: GID) -> CstdResult<HashSet<UserCstd>> {
     let mut uids = HashSet::new();
     unsafe {
         libc::setpwent();
@@ -160,8 +160,8 @@ pub(crate) fn libc_lookup_group_primary_users(gid: GID) -> CrossResult<HashSet<U
     }
     
     let users = uids.into_iter()
-        .map(|uid| libc_lookup_user(uid))
-        .collect::<CrossResult<HashSet<_>>>()?
+        .map(|uid| cstd_lookup_user(uid))
+        .collect::<CstdResult<HashSet<_>>>()?
         .into_iter()
         .filter_map(|opt| opt)
         .collect();
@@ -169,13 +169,13 @@ pub(crate) fn libc_lookup_group_primary_users(gid: GID) -> CrossResult<HashSet<U
     Ok(users)
 }
 
-pub(crate) fn libc_lookup_group_secondary_users(gid: GID) -> CrossResult<HashSet<User>> {
+pub fn cstd_lookup_group_secondary_users(gid: GID) -> CstdResult<HashSet<UserCstd>> {
     let mut member_names = HashSet::new();
     
     unsafe {
         let group_ptr = libc::getgrgid(gid);
         if group_ptr.is_null() {
-            return CrossError::err_not_found(ErrNoun::UserGroup);
+            return CstdError::err_not_found(CstdEr::UserGroup);
         }
         
         let members_ptr = (*group_ptr).gr_mem;
@@ -187,7 +187,7 @@ pub(crate) fn libc_lookup_group_secondary_users(gid: GID) -> CrossResult<HashSet
                     break;
                 }
                 
-                let member_name = PlatString::from(CStr::from_ptr(member_ptr));
+                let member_name = TwoString::try_from_ffi_cstr(CStr::from_ptr(member_ptr))?;
                 member_names.insert(member_name);
                 i += 1;
             }
@@ -195,8 +195,8 @@ pub(crate) fn libc_lookup_group_secondary_users(gid: GID) -> CrossResult<HashSet
     }
     
     let users = member_names.into_iter()
-        .map(|username| libc_lookup_username(username.as_plat_str()))
-        .collect::<CrossResult<HashSet<_>>>()?
+        .map(|username| cstd_lookup_username(username.as_two_str()))
+        .collect::<CstdResult<HashSet<_>>>()?
         .into_iter()
         .filter_map(|opt| opt)
         .collect();
@@ -204,31 +204,31 @@ pub(crate) fn libc_lookup_group_secondary_users(gid: GID) -> CrossResult<HashSet
     Ok(users)
 }
 
-pub(crate) fn libc_lookup_process_user() -> CrossResult<User> {
+pub fn cstd_lookup_process_user() -> CstdResult<UserCstd> {
     let uid = unsafe { libc::getuid() };
-    libc_lookup_user(uid)?
-        .ok_or_else(|| CrossError::not_found(ErrNoun::User))
+    cstd_lookup_user(uid)?
+        .ok_or_else(|| CstdError::not_found(CstdEr::User))
 }
 
-pub(crate) fn libc_lookup_effective_process_user() -> CrossResult<User> {
+pub fn cstd_lookup_effective_process_user() -> CstdResult<UserCstd> {
     let uid = unsafe { libc::geteuid() };
-    libc_lookup_user(uid)?
-        .ok_or_else(|| CrossError::not_found(ErrNoun::User))
+    cstd_lookup_user(uid)?
+        .ok_or_else(|| CstdError::not_found(CstdEr::User))
 }
 
-pub(crate) fn libc_lookup_process_group() -> CrossResult<Group> {
+pub fn cstd_lookup_process_group() -> CstdResult<UserGroupCstd> {
     let gid = unsafe { libc::getgid() };
-    libc_lookup_group(gid)?
-        .ok_or_else(|| CrossError::not_found(ErrNoun::UserGroup))
+    cstd_lookup_group(gid)?
+        .ok_or_else(|| CstdError::not_found(CstdEr::UserGroup))
 }
 
-pub(crate) fn libc_lookup_effective_process_group() -> CrossResult<Group> {
+pub fn cstd_lookup_effective_process_group() -> CstdResult<UserGroupCstd> {
     let gid = unsafe { libc::getegid() };
-    libc_lookup_group(gid)?
-        .ok_or_else(|| CrossError::not_found(ErrNoun::UserGroup))
+    cstd_lookup_group(gid)?
+        .ok_or_else(|| CstdError::not_found(CstdEr::UserGroup))
 }
 
-pub(crate) fn libc_lookup_hostname() -> CrossResult<String> {
+pub fn cstd_lookup_hostname() -> CstdResult<String> {
     const BUF_SIZE: usize = 256;
     let mut buf = [0u8; BUF_SIZE];
     let buf_ptr = buf.as_mut_ptr() as *mut libc::c_char;
@@ -236,12 +236,12 @@ pub(crate) fn libc_lookup_hostname() -> CrossResult<String> {
     let hostname = unsafe {
         let err = libc::gethostname(buf_ptr, BUF_SIZE);
         if err != 0 {
-            return CrossError::err_internal("libc::gethostname");
+            return CstdError::err_sys_call(CstdEr::Hostname);
         }
         
         CStr::from_ptr(buf_ptr)
             .to_str()
-            .map_err(|_| CrossError::string())?
+            .map_err(|_| CstdError::String)?
             .to_string()
     };
     

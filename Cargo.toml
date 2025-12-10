@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/sourcetrait_cstd",
+    "crates/sourcetrait_crossplat_unix",
 ]
 
 [workspace.dependencies]
