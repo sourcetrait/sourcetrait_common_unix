@@ -13,9 +13,14 @@ keywords = ["sourcetrait", "common", "unix", "libc", "cstd"]
 [dependencies]
 snafu.workspace = true
 sourcetrait_twostr.workspace = true
+sourcetrait_crossplat_bridge = { workspace = true, optional = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc.workspace = true
 
 [dev-dependencies]
 sourcetrait_testing.workspace = true
+
+[features]
+default = ["crossplat"]
+crossplat = ["sourcetrait_crossplat_bridge"]
