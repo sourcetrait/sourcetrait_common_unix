@@ -204,7 +204,7 @@ pub fn cstd_lookup_group_secondary_users(gid: GID) -> CstdResult<HashSet<UserCst
     Ok(users)
 }
 
-pub fn cstd_lookup_process_user() -> CstdResult<UserCstd> {
+pub fn cstd_lookup_real_process_user() -> CstdResult<UserCstd> {
     let uid = unsafe { libc::getuid() };
     cstd_lookup_user(uid)?
         .ok_or_else(|| CstdError::not_found(CstdEr::User))
@@ -216,7 +216,7 @@ pub fn cstd_lookup_effective_process_user() -> CstdResult<UserCstd> {
         .ok_or_else(|| CstdError::not_found(CstdEr::User))
 }
 
-pub fn cstd_lookup_process_group() -> CstdResult<UserGroupCstd> {
+pub fn cstd_lookup_real_process_group() -> CstdResult<UserGroupCstd> {
     let gid = unsafe { libc::getgid() };
     cstd_lookup_group(gid)?
         .ok_or_else(|| CstdError::not_found(CstdEr::UserGroup))
@@ -226,24 +226,4 @@ pub fn cstd_lookup_effective_process_group() -> CstdResult<UserGroupCstd> {
     let gid = unsafe { libc::getegid() };
     cstd_lookup_group(gid)?
         .ok_or_else(|| CstdError::not_found(CstdEr::UserGroup))
-}
-
-pub fn cstd_lookup_hostname() -> CstdResult<String> {
-    const BUF_SIZE: usize = 256;
-    let mut buf = [0u8; BUF_SIZE];
-    let buf_ptr = buf.as_mut_ptr() as *mut libc::c_char;
-    
-    let hostname = unsafe {
-        let err = libc::gethostname(buf_ptr, BUF_SIZE);
-        if err != 0 {
-            return CstdError::err_sys_call(CstdEr::Hostname);
-        }
-        
-        CStr::from_ptr(buf_ptr)
-            .to_str()
-            .map_err(|_| CstdError::String)?
-            .to_string()
-    };
-    
-    Ok(hostname)
 }

@@ -77,9 +77,9 @@ https://github.com/sourcetrait
 
 
 
-[Crate]: https://crates.io/crates/sourcetrait_crossplat
-[Crate Badge]: https://img.shields.io/crates/v/sourcetrait_crossplat.svg
-[Docs]: https://docs.rs/sourcetrait_crossplat
+[Crate]: https://crates.io/crates/sourcetrait_crossplat_unix
+[Crate Badge]: https://img.shields.io/crates/v/sourcetrait_crossplat_unix.svg
+[Docs]: https://docs.rs/sourcetrait_crossplat_unix
 [Docs Badge]: https://img.shields.io/badge/docs-blue
 [License]: #License-AGPL3
 [License Badge]: https://img.shields.io/badge/license-AGPL3-blue.svg
