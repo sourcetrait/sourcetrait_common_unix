@@ -11,24 +11,24 @@ impl cross::AccessComponentLookup for UnixAccessComponentLookup {
     };
 }
 
-fn lookup_user_fn(query: cross::Access<'_>) -> cross::BridgeResult<Option<cross::User>> {
+fn lookup_user_fn(query: cross::AID<'_>) -> cross::BridgeResult<Option<cross::User>> {
     let user = match query {
-        cross::Access::Name(name) => cstd_lookup_username(name)?,
-        cross::Access::ID(id) => cstd_lookup_user(id)?,
-        cross::Access::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
-        cross::Access::SID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
+        cross::AID::Name(name) => cstd_lookup_username(name)?,
+        cross::AID::ID(id) => cstd_lookup_user(id)?,
+        cross::AID::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
+        cross::AID::SID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
     };
     
     let user = user.map(cross::User::from);
     Ok(user)
 }
 
-fn lookup_group_fn(query: cross::Access) -> cross::BridgeResult<Option<cross::UserGroup>> {
+fn lookup_group_fn(query: cross::AID) -> cross::BridgeResult<Option<cross::UserGroup>> {
     let group = match query {
-        cross::Access::Name(name) => cstd_lookup_groupname(name)?,
-        cross::Access::ID(id) => cstd_lookup_group(id)?,
-        cross::Access::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
-        cross::Access::SID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
+        cross::AID::Name(name) => cstd_lookup_groupname(name)?,
+        cross::AID::ID(id) => cstd_lookup_group(id)?,
+        cross::AID::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
+        cross::AID::SID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
     };
     
     let group = group.map(cross::UserGroup::from);
@@ -55,7 +55,7 @@ fn _lookup_cstd_real_process_group() -> cross::BridgeResult<cross::UserGroup> {
         .map_err(|e| e.into())
 }
 
-fn lookup_user_groups_fn(user: &cross::User) -> cross::BridgeResult<(Vec<cross::UserGroup>, cross::Capable<cross::AccessKey>)> {
+fn lookup_user_groups_fn(user: &cross::User) -> cross::BridgeResult<(Vec<cross::UserGroup>, cross::Capable<cross::PrimaryUserGroupsCapable, cross::AccessID>)> {
     let mut groups = cstd_lookup_username_secondary_groups(user.username())?
         .into_iter()
         .map(cross::UserGroup::from)
@@ -64,7 +64,7 @@ fn lookup_user_groups_fn(user: &cross::User) -> cross::BridgeResult<(Vec<cross::
     let primary_group = cstd_lookup_user_primary_group(user.uid())
         .map(cross::UserGroup::from)?;
     
-    let primary_group_key = primary_group.key_identifier();
+    let primary_group_key = primary_group.id();
     groups.insert(primary_group);
     
     let groups = groups.into_iter().map(cross::UserGroup::from).collect();

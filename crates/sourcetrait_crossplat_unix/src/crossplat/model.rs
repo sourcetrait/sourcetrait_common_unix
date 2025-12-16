@@ -5,9 +5,9 @@ impl From<UserCstd> for cross::User {
         cross::User {
             ident: cross::AccessIdent {
                 name: u.username,
-                domain: cross::Capable::Incapable,
+                domain: cross::Capable::Incapable(cross::DomainsCapable),
                 id: cross::Capable::Capable(u.uid),
-                sid: cross::Capable::Incapable,
+                sid: cross::Capable::Incapable(cross::WindowsSIDsCapable),
             },
         }
     }
@@ -18,9 +18,9 @@ impl From<UserGroupCstd> for cross::UserGroup {
         cross::UserGroup {
             ident: cross::AccessIdent {
                 name: g.groupname,
-                domain: cross::Capable::Incapable,
+                domain: cross::Capable::Incapable(cross::DomainsCapable),
                 id: cross::Capable::Capable(g.gid),
-                sid: cross::Capable::Incapable,
+                sid: cross::Capable::Incapable(cross::WindowsSIDsCapable),
             },
         }
     }
