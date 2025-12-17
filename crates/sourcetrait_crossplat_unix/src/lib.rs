@@ -17,6 +17,9 @@ pub(crate) mod cstd {
         pub(crate) mod net;
     }
 }
+pub(crate) mod unix_fs {
+    pub(crate) mod copy_preserved;
+}
 
 pub use crate::{
     crossplat::{
@@ -34,15 +37,26 @@ pub use crate::{
             net::*,
         },
         model::*,
-    }
+    },
+    unix_fs::{
+        copy_preserved::copy_preserved,
+    },
 };
 
+#[allow(unused_imports)]
 pub(crate) use std::{
     collections::HashSet,
     env,
     ffi::{CStr, CString},
-    path::{PathBuf},
+    io,
+    fs,
+    os::unix::{
+        ffi::OsStrExt,
+        fs::MetadataExt,
+    },
+    path::{Path, PathBuf},
     ptr,
+    process::Command,
 };
 
 pub(crate) use sourcetrait_twostr::*;
