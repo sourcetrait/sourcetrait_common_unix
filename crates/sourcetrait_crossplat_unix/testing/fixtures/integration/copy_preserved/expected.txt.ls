@@ -1,0 +1,1 @@
+-rw--w-r-- 1 $USER $GROUP 19 Dec 19 09:41 expected.txt
