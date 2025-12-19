@@ -149,6 +149,9 @@ fn set_timestamps(dst: &CStr, meta: &fs::Metadata, opts: &CopyOptions) -> io::Re
     }
 }
 
+/// - [man page: listxattr](https://man7.org/linux/man-pages/man2/listxattr.2.html)  
+/// - [man page: getxattr](https://man7.org/linux/man-pages/man2/getxattr.2.html)
+/// - [man page: setxattr](https://man7.org/linux/man-pages/man2/setxattr.2.html)
 fn copy_xattrs(src: &CStr, dst: &CStr, opts: &CopyOptions) -> io::Result<()> {
     let code = unsafe {
         match opts.follow_symlinks {
