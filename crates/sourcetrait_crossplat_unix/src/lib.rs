@@ -64,3 +64,4 @@ pub(crate) use sourcetrait_crossplat_bridge::{
     self as cross,
     prelude::driver::*
 };
+pub(crate) use const_format::concatcp;

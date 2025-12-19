@@ -1,4 +1,5 @@
 use crate::*;
+use er::Er;
 
 /// Options used with [copy_preserved].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -20,9 +21,6 @@ impl CopyOptions {
         follow_symlinks: true,
         lossy_extended_attributes: false,
     };
-    
-    pub const FOLLOW_SYMLINKS: bool = true;
-    pub const LOSSY_EXT_ATTRIBUTES: bool = false;
 }
 
 impl Default for CopyOptions {
@@ -61,11 +59,232 @@ pub fn copy_preserved<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2, opts: 
     chmod(&dst_cstr, &metadata, &opts) // permissions
         .map_err(|e| recover(&src, &dst, e))?;
     
-    set_timestamps(&dst_cstr, &metadata) // created, modified 
+    set_timestamps(&dst_cstr, &metadata, &opts) // created, modified 
         .map_err(|e| recover(&src, &dst, e))?;
     
     copy_xattrs(&src_cstr, &dst_cstr, &opts) // extended attributes
         .map_err(|e| recover(src, dst, e))?;
+    
+    Ok(())
+}
+
+/// [man page](https://man7.org/linux/man-pages/man2/lchown.2.html)
+fn chown(path: &CStr, meta: &fs::Metadata, opts: &CopyOptions) -> io::Result<()> {
+    let code = unsafe {
+        match opts.follow_symlinks {
+            true => libc::chown(
+                path.as_ptr(),
+                meta.uid(),
+                meta.gid(),
+            ),
+            false => libc::lchown(
+                path.as_ptr(),
+                meta.uid(),
+                meta.gid(),
+            ),
+        }
+    };
+    
+    match code {
+        0 => Ok(()),
+        -1 => Er::chown.lasterr(&opts),
+        _ => Er::chown.err_unknown(opts),
+    }
+}
+
+/// [man page](https://man7.org/linux/man-pages/man2/chmod.2.html)
+fn chmod(path: &CStr, meta: &fs::Metadata, opts: &CopyOptions) -> io::Result<()> {
+    let flags = match opts.follow_symlinks {
+        true => 0,
+        false => libc::AT_SYMLINK_NOFOLLOW,
+    };
+    
+    let code = unsafe {
+        libc::fchmodat(
+            libc::AT_FDCWD,
+            path.as_ptr(),
+            meta.mode(),
+            flags,
+        )
+    };
+    
+    match code {
+        0 => Ok(()),
+        -1 => Er::fchmodat.lasterr_unsupported_ok_if(!opts.follow_symlinks, opts),
+        _ => Er::fchmodat.err_unknown(opts),
+    }
+}
+
+/// [man page](https://man7.org/linux/man-pages/man2/utimensat.2.html)
+fn set_timestamps(dst: &CStr, meta: &fs::Metadata, opts: &CopyOptions) -> io::Result<()> {
+    let times = [
+        libc::timespec {
+            tv_sec: meta.atime(),
+            tv_nsec: meta.atime_nsec(),
+        },
+        libc::timespec {
+            tv_sec: meta.mtime(),
+            tv_nsec: meta.mtime_nsec(),
+        },
+    ];
+    
+    let flags = match opts.follow_symlinks {
+        true => 0,
+        false => libc::AT_SYMLINK_NOFOLLOW,
+    };
+    
+    let code = unsafe {
+        libc::utimensat(
+            libc::AT_FDCWD,
+            dst.as_ptr(),
+            times.as_ptr(),
+            flags,
+        )
+    };
+    
+    match code {
+        0 => Ok(()),
+        -1 => Er::utimensat.lasterr(opts),
+        _ => Er::utimensat.err_unknown(opts),
+    }
+}
+
+fn copy_xattrs(src: &CStr, dst: &CStr, opts: &CopyOptions) -> io::Result<()> {
+    let code = unsafe {
+        match opts.follow_symlinks {
+            true => libc::listxattr(
+                src.as_ptr(),
+                ptr::null_mut(),
+                0,
+            ),
+            false => libc::llistxattr(
+                src.as_ptr(),
+                ptr::null_mut(),
+                0,
+            ),
+        }
+    };
+        
+    let size = match code {
+        n if n > 0 => n,
+        0 => return Ok(()),
+        -1 => return Er::listxattr.lasterr_unsupported_ok(opts),
+        _ => return Er::listxattr.err_unknown(&opts),
+    };
+        
+    let mut list = vec![0u8; size as usize];
+    let code = unsafe {
+        match opts.follow_symlinks {
+            true => libc::listxattr(
+                src.as_ptr(),
+                list.as_mut_ptr() as *mut i8,
+                size as usize,
+            ),
+            false => libc::llistxattr(
+                src.as_ptr(),
+                list.as_mut_ptr() as *mut i8,
+                size as usize,
+            ),
+        }
+    };
+        
+    match code {
+        0 => return Ok(()),
+        -1 => return Er::listxattr.lasterr(opts),
+        n if n == size => (), // double-check
+        _ => return Er::listxattr.err_unknown(&opts),
+    };
+        
+    // each name is null-terminated
+    let mut pos = 0;
+    let list_len = list.len();
+    while pos < list_len {
+        let name_start = pos;
+        while pos < list_len && list[pos] != 0 {
+            pos += 1;
+        }
+        
+        if pos <= name_start {
+            break;
+        }
+        
+        let name = CStr::from_bytes_with_nul(&list[name_start..=pos])
+            .map_err(|_| Er::listxattr.data(opts))?;
+        
+        let code = unsafe {
+            match opts.follow_symlinks {
+                true => libc::getxattr(
+                    src.as_ptr(),
+                    name.as_ptr(),
+                    ptr::null_mut(),
+                    0,
+                ),
+                false => libc::lgetxattr(
+                    src.as_ptr(),
+                    name.as_ptr(),
+                    ptr::null_mut(),
+                    0,
+                ),
+            }
+        };
+        
+        let value_size = match code {
+            n if n > 0 => n,
+            -1 => return Er::getxattr.lasterr(opts),
+            _ => return Er::getxattr.err_unknown(&opts),
+        };
+        
+        let mut value = vec![0u8; value_size as usize];
+        let code = unsafe {
+            match opts.follow_symlinks {
+                true => libc::getxattr(
+                    src.as_ptr(),
+                    name.as_ptr(),
+                    value.as_mut_ptr() as *mut libc::c_void,
+                    value_size as usize,
+                ),
+                false => libc::lgetxattr(
+                    src.as_ptr(),
+                    name.as_ptr(),
+                    value.as_mut_ptr() as *mut libc::c_void,
+                    value_size as usize,
+                ),
+            }
+        };
+        
+        match code {
+            n if n == value_size => (), // double-check
+            -1 => return Er::getxattr.lasterr(opts),
+            _ => return Er::getxattr.err_unknown(&opts),
+        };
+        
+        let code = unsafe {
+            match opts.follow_symlinks {
+                true => libc::setxattr(
+                    dst.as_ptr(),
+                    name.as_ptr(),
+                    value.as_ptr() as *const libc::c_void,
+                    value.len(),
+                    0,
+                ),
+                false => libc::lsetxattr(
+                    dst.as_ptr(),
+                    name.as_ptr(),
+                    value.as_ptr() as *const libc::c_void,
+                    value.len(),
+                    0,
+                ),
+            }
+        };
+        
+        match code {
+            0 => (),
+            -1 => Er::setxattr.lasterr_unsupported_ok_if(opts.lossy_extended_attributes, opts)?,
+            _ => return Er::setxattr.err_unknown(&opts),
+        };
+        
+        pos += 1;
+    }
     
     Ok(())
 }
@@ -108,270 +327,99 @@ fn recover<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2, source: io::Error
     }
 }
 
-#[inline]
-fn err_io_other<T>(msg: &'static str) -> io::Result<T> {
-    io::Result::Err(io::Error::new(io::ErrorKind::Other, msg))
-}
+pub(super) mod er {
+    use crate::*;
+    const CHOWN: &'static str = "libc::chown";
+    const LCHOWN: &'static str = "libc::lchown";
+    const FCHMODAT: &'static str = "libc::fchmodat";
+    const GETXATTR: &'static str = "libc::getxattr";
+    const LGETXATTR: &'static str = "libc::lgetxattr";
+    const LLISTXATTR: &'static str = "libc::llistxattr";
+    const LISTXATTR: &'static str = "libc::listxattr";
+    const LSETXATTR: &'static str = "libc::lsetxattr";
+    const SETXATTR: &'static str = "libc::setxattr";
+    const UTIMENSAT: &'static str = "libc::utimensat";
+    
+    const E_UNKNOWN: &'static str = "Unknown error from ";
+    const UNKNOWN_CHOWN: &'static str = concatcp!(E_UNKNOWN, CHOWN); 
+    const UNKNOWN_LCHOWN: &'static str = concatcp!(E_UNKNOWN, LCHOWN); 
+    const UNKNOWN_FCHMODAT: &'static str = concatcp!(E_UNKNOWN, FCHMODAT); 
+    const UNKNOWN_GETXATTR: &'static str = concatcp!(E_UNKNOWN, GETXATTR); 
+    const UNKNOWN_LGETXATTR: &'static str = concatcp!(E_UNKNOWN, LGETXATTR); 
+    const UNKNOWN_LISTXATTR: &'static str = concatcp!(E_UNKNOWN, LISTXATTR); 
+    const UNKNOWN_LLISTXATTR: &'static str = concatcp!(E_UNKNOWN, LLISTXATTR); 
+    const UNKNOWN_SETXATTR: &'static str = concatcp!(E_UNKNOWN, SETXATTR); 
+    const UNKNOWN_LSETXATTR: &'static str = concatcp!(E_UNKNOWN, LSETXATTR); 
+    const UNKNOWN_UTIMENSAT: &'static str = concatcp!(E_UNKNOWN, UTIMENSAT); 
+    
+    #[allow(non_camel_case_types)]
+    pub(super) enum Er {
+        chown,
+        fchmodat,
+        listxattr,
+        getxattr,
+        setxattr,
+        utimensat,
+    }
+    
+    impl Er {
+        #[inline]
+        const fn e_unknown(self, opts: &super::CopyOptions) -> &'static str {
+            match self {
+                Self::chown => match opts.follow_symlinks {
+                    true => UNKNOWN_CHOWN,
+                    false => UNKNOWN_LCHOWN,
+                },
+                Self::fchmodat => UNKNOWN_FCHMODAT,
+                Self::listxattr => match opts.follow_symlinks {
+                    true => UNKNOWN_LISTXATTR,
+                    false => UNKNOWN_LLISTXATTR,
+                },
+                Self::getxattr => match opts.follow_symlinks {
+                    true => UNKNOWN_GETXATTR,
+                    false => UNKNOWN_LGETXATTR,
+                },
+                Self::setxattr => match opts.follow_symlinks {
+                    true => UNKNOWN_SETXATTR,
+                    false => UNKNOWN_LSETXATTR,
+                },
+                Self::utimensat => UNKNOWN_UTIMENSAT,
+            }
+        }
+        
+        #[inline]
+        pub(super) fn err_unknown<T>(self, opts: &super::CopyOptions) -> io::Result<T> {
+            io::Result::Err(io::Error::new(io::ErrorKind::Other, self.e_unknown(opts)))
+        }
+        
+        #[inline]
+        pub(super) fn lasterr<T>(self, opts: &super::CopyOptions) -> io::Result<T> {
+            self._err(opts)
+        }
+        
+        pub(super) fn lasterr_unsupported_ok(self, opts: &super::CopyOptions) -> io::Result<()> {
+            self.lasterr_unsupported_ok_if(false, opts)
+        }
+        
+        pub(super) fn lasterr_unsupported_ok_if(self, unsupported_ok: bool, opts: &super::CopyOptions) -> io::Result<()> {
+            let err = io::Error::last_os_error();
+            return match err.raw_os_error() {
+                Some(libc::ENOTSUP) if unsupported_ok => Ok(()),
+                Some(_) => Err(err),
+                None => self.err_unknown(opts),
+            }
+        }
 
-#[inline]
-fn io_data_error(msg: &'static str) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, msg)
-}
-
-/// [man page](https://man7.org/linux/man-pages/man2/lchown.2.html)
-fn chown(path: &CStr, meta: &fs::Metadata, opts: &CopyOptions) -> io::Result<()> {
-    #[inline]
-    const fn e_chown_unknown(opts: &CopyOptions) -> &'static str {
-        const E_CHOWN_UNKNOWN: &'static str = "Unknown libc::chown error";
-        const E_LCHOWN_UNKNOWN: &'static str = "Unknown libc::lchown error";
-        
-        match opts.follow_symlinks {
-            true => E_CHOWN_UNKNOWN,
-            false => E_LCHOWN_UNKNOWN,
-        }
-    }
-    
-    fn err_chown(opts: &CopyOptions) -> io::Result<()> {
-        let err = io::Error::last_os_error();
-        return match err.raw_os_error() {
-            Some(_) => Err(err),
-            None => err_io_other(e_chown_unknown(&opts)),
-        }
-    }
-    
-    let code = unsafe {
-        match opts.follow_symlinks {
-            true => libc::chown(
-                path.as_ptr(),
-                meta.uid(),
-                meta.gid(),
-            ),
-            false => libc::lchown(
-                path.as_ptr(),
-                meta.uid(),
-                meta.gid(),
-            ),
-        }
-    };
-    
-    match code {
-        0 => Ok(()),
-        -1 => err_chown(&opts),
-        _ => err_io_other(e_chown_unknown(&opts)),
-    }
-}
-
-/// [man page](https://man7.org/linux/man-pages/man2/chmod.2.html)
-fn chmod(path: &CStr, meta: &fs::Metadata, opts: &CopyOptions) -> io::Result<()> {
-    const E_FCHMODAT_UNKNOWN: &'static str = "Unknown libc::fchmodat error";
-    
-    fn check_fchmodat() -> io::Result<()> {
-        let err = io::Error::last_os_error();
-        return match err.raw_os_error() {
-            Some(libc::ENOTSUP) => Ok(()),
-            Some(_) => Err(err),
-            None => err_io_other(E_FCHMODAT_UNKNOWN),
-        }
-    }
-    
-    let flags = match opts.follow_symlinks {
-        true => 0,
-        false => libc::AT_SYMLINK_NOFOLLOW,
-    };
-    
-    let code = unsafe {
-        libc::fchmodat(
-            libc::AT_FDCWD,
-            path.as_ptr(),
-            meta.mode(),
-            flags,
-        )
-    };
-    
-    match code {
-        0 => Ok(()),
-        -1 => check_fchmodat(),
-        _ => err_io_other(E_FCHMODAT_UNKNOWN),
-    }
-}
-
-/// [man page](https://man7.org/linux/man-pages/man2/utimensat.2.html)
-fn set_timestamps(dst: &CStr, meta: &fs::Metadata, opts: &CopyOptions) -> io::Result<()> {
-    const E_UTIMENSAT_UNKNOWN: &'static str = "Unknown libc::utimensat error";
-    
-    fn err_utimensat() -> io::Result<()> {
-        let err = io::Error::last_os_error();
-        return match err.raw_os_error() {
-            Some(_) => Err(err),
-            None => err_io_other(E_UTIMENSAT_UNKNOWN),
-        }
-    }
-    
-    let times = [
-        libc::timespec {
-            tv_sec: meta.atime(),
-            tv_nsec: meta.atime_nsec(),
-        },
-        libc::timespec {
-            tv_sec: meta.mtime(),
-            tv_nsec: meta.mtime_nsec(),
-        },
-    ];
-    
-    let flags = match opts.follow_symlinks {
-        true => 0,
-        false => libc::AT_SYMLINK_NOFOLLOW,
-    };
-    
-    let code = unsafe {
-        libc::utimensat(
-            libc::AT_FDCWD,
-            dst.as_ptr(),
-            times.as_ptr(),
-            flags,
-        )
-    };
-    
-    match code {
-        0 => Ok(()),
-        -1 => err_utimensat(),
-        _ => err_io_other(E_UTIMENSAT_UNKNOWN),
-    }
-}
-
-fn copy_xattrs(src: &CStr, dst: &CStr, options: &CopyOptions) -> io::Result<()> {
-    const UNSUPPORTED_OK: bool = true;
-    const E_LLISTXATTR_UNKNOWN: &'static str = "Unknown libc::llistxattr error";
-    const E_LISTXATTR_UNKNOWN: &'static str = "Unknown libc::listxattr error";
-    const E_LGETXATTR_UNKNOWN: &'static str = "Unknown libc::lgetxattr error";
-    const E_GETXATTR_UNKNOWN: &'static str = "Unknown libc::getxattr error";
-    const E_LSETXATTR_UNKNOWN: &'static str = "Unknown libc::lsetxattr error";
-    const E_SETXATTR_UNKNOWN: &'static str = "Unknown libc::setxattr error";
-    const E_LLISTXATTR_NAME: &'static str = "Invalid name from libc::llistxattr";
-    const E_LISTXATTR_NAME: &'static str = "Invalid name from libc::listxattr";
-    
-    fn err_llistxattr(unsupported_ok: bool) -> io::Result<()> {
-        let err = io::Error::last_os_error();
-        return match err.raw_os_error() {
-            Some(libc::ENOTSUP) if unsupported_ok => Ok(()),
-            Some(_) => Err(err),
-            None => err_io_other(E_LLISTXATTR_UNKNOWN),
-        }
-    }
-    
-    fn err_lgetxattr() -> io::Result<()> {
-        let err = io::Error::last_os_error();
-        return match err.raw_os_error() {
-            Some(_) => Err(err),
-            None => err_io_other(E_LGETXATTR_UNKNOWN),
-        }
-    }
-    
-    fn check_lsetxattr(unsupported_ok: bool) -> io::Result<()> {
-        let err = io::Error::last_os_error();
-        return match err.raw_os_error() {
-            Some(libc::ENOTSUP) if unsupported_ok => Ok(()),
-            Some(_) => Err(err),
-            None => err_io_other(E_LSETXATTR_UNKNOWN),
-        }
-    }
-
-    let code = unsafe {
-        libc::llistxattr(
-            src.as_ptr(),
-            ptr::null_mut(),
-            0,
-        )
-    };
-        
-    let size = match code {
-        -1 => return err_llistxattr(UNSUPPORTED_OK),
-        0 => return Ok(()),
-        n if n > 0 => n,
-        _ => return err_io_other(E_LLISTXATTR_UNKNOWN),
-    };
-        
-    let mut list = vec![0u8; size as usize];
-    let code = unsafe {
-        libc::llistxattr(
-            src.as_ptr(),
-            list.as_mut_ptr() as *mut i8,
-            size as usize,
-        )
-    };
-        
-    match code {
-        -1 => return err_llistxattr(!UNSUPPORTED_OK),
-        0 => return Ok(()),
-        n if n == size => (), // double-check
-        _ => return err_io_other(E_LLISTXATTR_UNKNOWN),
-    };
-        
-    // each name is null-terminated
-    let mut pos = 0;
-    let list_len = list.len();
-    while pos < list_len {
-        let name_start = pos;
-        while pos < list_len && list[pos] != 0 {
-            pos += 1;
+        fn _err<T>(self, opts: &super::CopyOptions) -> io::Result<T> {
+            let err = io::Error::last_os_error();
+            return match err.raw_os_error() {
+                Some(_) => Err(err),
+                None => self.err_unknown(opts),
+            }
         }
         
-        if pos <= name_start {
-            break;
+        pub(super) fn data(self, opts: &super::CopyOptions) -> io::Error {
+            io::Error::new(io::ErrorKind::InvalidData, self.e_unknown(opts))
         }
-        
-        let name = CStr::from_bytes_with_nul(&list[name_start..=pos])
-            .map_err(|_| io_data_error(E_LLISTXATTR_NAME))?;
-        
-        let code = unsafe {
-            libc::lgetxattr(
-                src.as_ptr(),
-                name.as_ptr(),
-                ptr::null_mut(),
-                0,
-            )
-        };
-        
-        let value_size = match code {
-            -1 => return err_lgetxattr(),
-            n if n > 0 => n,
-            _ => return err_io_other(E_LGETXATTR_UNKNOWN),
-        };
-        
-        let mut value = vec![0u8; value_size as usize];
-        let code = unsafe {
-            libc::lgetxattr(
-                src.as_ptr(),
-                name.as_ptr(),
-                value.as_mut_ptr() as *mut libc::c_void,
-                value_size as usize,
-            )
-        };
-        
-        match code {
-            -1 => return err_lgetxattr(),
-            n if n == value_size => (), // double-check
-            _ => return err_io_other(E_LGETXATTR_UNKNOWN),
-        };
-        
-        let code = unsafe {
-            libc::lsetxattr(
-                dst.as_ptr(),
-                name.as_ptr(),
-                value.as_ptr() as *const libc::c_void,
-                value.len(),
-                0,
-            )
-        };
-        
-        match code {
-            0 => (),
-            -1 => check_lsetxattr(options.lossy_extended_attributes)?,
-            _ => return err_io_other(E_LSETXATTR_UNKNOWN),
-        };
-        
-        pos += 1;
     }
-    
-    Ok(())
 }

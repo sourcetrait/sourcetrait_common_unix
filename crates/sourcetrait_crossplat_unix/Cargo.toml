@@ -11,6 +11,7 @@ categories = []
 keywords = ["sourcetrait", "common", "unix", "libc", "cstd"]
 
 [dependencies]
+const_format.workspace = true
 snafu.workspace = true
 sourcetrait_twostr.workspace = true
 sourcetrait_crossplat_bridge = { workspace = true, optional = true }

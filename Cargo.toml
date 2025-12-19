@@ -5,6 +5,7 @@ members = [
 ]
 
 [workspace.dependencies]
+const_format = "0.2"
 libc = "0.2"
 snafu = "0.8"
 sourcetrait_stdx = "1"
