@@ -16,15 +16,28 @@ use super::prelude::*;
 pub fn copy_preserved<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2, opts: &FsOptions) -> Result<(), CopyError> {
     let src = src.as_ref();
     let dst = dst.as_ref();
-    let metadata = src.metadata()
+    
+    let metadata = match opts.follow_symlinks {
+            false if src.is_symlink() => src.symlink_metadata(),
+            _ => src.metadata(),
+        }
         .map_err(|e| CopyError::clean(&src, &dst, e))?;
+    
     let src_cstr = CString::new(src.as_os_str().as_bytes())
         .map_err(|e| CopyError::clean(&src, &dst, io::Error::new(io::ErrorKind::InvalidInput, e)))?;
     let dst_cstr = CString::new(dst.as_os_str().as_bytes())
         .map_err(|e| CopyError::clean(&src, &dst, io::Error::new(io::ErrorKind::InvalidInput, e)))?;
     
-    fs::copy(&src, &dst)
-        .map_err(|e| recover(&src, &dst, e))?;
+    match opts.follow_symlinks {
+        true => {
+            fs::copy(&src, &dst)
+                .map_err(|e| recover(&src, &dst, e))?;
+        },
+        false => {
+            std::os::unix::fs::symlink(&src, &dst)
+                .map_err(|e| recover(&src, &dst, e))?;
+        },
+    }
     
     chown(&dst_cstr, &metadata, &opts) // ownership
         .map_err(|e| recover(&src, &dst, e))?;
@@ -32,11 +45,11 @@ pub fn copy_preserved<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2, opts: 
     chmod(&dst_cstr, &metadata, &opts) // permissions
         .map_err(|e| recover(&src, &dst, e))?;
     
-    set_timestamps(&dst_cstr, &metadata, &opts) // created, modified 
-        .map_err(|e| recover(&src, &dst, e))?;
-    
     copy_xattrs(&src_cstr, &dst_cstr, &opts) // extended attributes
         .map_err(|e| recover(src, dst, e))?;
+    
+    set_timestamps(&dst_cstr, &metadata, &opts) // accessed, modified 
+        .map_err(|e| recover(&src, &dst, e))?;
     
     Ok(())
 }

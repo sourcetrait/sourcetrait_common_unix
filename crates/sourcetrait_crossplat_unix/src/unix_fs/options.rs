@@ -1,4 +1,4 @@
-use crate::*;
+//use crate::*;
 
 /// Options used with unix filesystem operations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,6 +22,15 @@ impl FsOptions {
         follow_symlinks: true,
         lossy_extended_attributes: false,
     };
+    
+    pub const DEFAULT_NOFOLLOW: Self = Self {
+        follow_symlinks: false,
+        ..Self::DEFAULT
+    };
+}
+
+impl FsOptions {
+    pub fn default_nofollow() -> Self { Self::DEFAULT_NOFOLLOW }
 }
 
 impl Default for FsOptions {

@@ -69,7 +69,7 @@ impl Er {
     }
     
     pub(crate) fn lasterr_unsupported_ok(self, opts: &FsOptions) -> io::Result<()> {
-        self.lasterr_unsupported_ok_if(false, opts)
+        self.lasterr_unsupported_ok_if(true, opts)
     }
     
     pub(crate) fn lasterr_unsupported_ok_if(self, unsupported_ok: bool, opts: &FsOptions) -> io::Result<()> {
@@ -82,7 +82,7 @@ impl Er {
     }
     
     pub(crate) fn lasterr_nodata_ok<T>(self, opts: &FsOptions) -> io::Result<Option<T>> {
-        self.lasterr_nodata_ok_if(false, opts)
+        self.lasterr_nodata_ok_if(true, opts)
     }
     
     pub(crate) fn lasterr_nodata_ok_if<T>(self, nodata_ok: bool, opts: &FsOptions) -> io::Result<Option<T>> {
