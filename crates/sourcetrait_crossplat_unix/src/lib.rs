@@ -2,6 +2,7 @@
 pub(crate) mod crossplat {
     pub(crate) mod component {
         pub(crate) mod access;
+        pub(crate) mod files;
         pub(crate) mod net;
         pub(crate) mod paths;
     }
@@ -19,9 +20,9 @@ pub(crate) mod cstd {
 }
 pub(crate) mod unix_fs {
     pub(crate) mod er;
-    pub(crate) mod options;
     pub(crate) mod copy_preserved;
     pub(crate) mod extended_attributes;
+    pub(crate) mod perms;
     
     pub(crate) mod prelude {
         pub(crate) use super::er::Er;
@@ -32,6 +33,7 @@ pub use crate::{
     crossplat::{
         component::{
             access::*,
+            files::*,
             net::*,
             paths::*,
         },
@@ -46,10 +48,18 @@ pub use crate::{
         model::*,
     },
     unix_fs::{
-        options::FsOptions,
-        copy_preserved::{CopyError, copy_preserved},
+        copy_preserved::copy_preserved,
         extended_attributes::{get_extended_attribute, set_extended_attribute},
+        perms::{
+            chown,
+            chmod,
+        }
     },
+};
+
+pub use sourcetrait_crossplat_bridge::{
+    CopyError, FsOptions, UID, GID, UnixFileMode, User, UserGroup,
+    Capable, PrimaryUserGroupsCapable, BasicPermissionMode, BridgeResult,
 };
 
 #[allow(unused_imports)]
@@ -60,6 +70,7 @@ pub(crate) use std::{
     io,
     fs,
     os::unix::{
+        self as unix,
         ffi::OsStrExt,
         fs::MetadataExt,
     },

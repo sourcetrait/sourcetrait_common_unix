@@ -58,20 +58,50 @@ impl Er {
         }
     }
     
+    const fn bridge_err(&self) -> cross::BridgeErr {
+        match self {
+            Self::chown => cross::BridgeErr::File,
+            Self::fchmodat => cross::BridgeErr::File,
+            Self::listxattr => cross::BridgeErr::File,
+            Self::getxattr => cross::BridgeErr::File,
+            Self::setxattr => cross::BridgeErr::File,
+            Self::utimensat => cross::BridgeErr::File,
+        }
+    }
+    
     #[inline]
     pub(crate) fn err_unknown<T>(self, opts: &FsOptions) -> io::Result<T> {
         io::Result::Err(io::Error::new(io::ErrorKind::Other, self.e_unknown(opts)))
     }
     
     #[inline]
+    pub(crate) fn bridge_err_unknown<T>(self, opts: &FsOptions) -> cross::BridgeResult<T> {
+        let noun = self.bridge_err();
+        self.err_unknown(opts)
+            .map_err(|e| cross::BridgeError::sys_call(noun, e))
+    }
+
+    #[inline]
     pub(crate) fn lasterr<T>(self, opts: &FsOptions) -> io::Result<T> {
         self._err(opts)
+    }
+    
+    pub(crate) fn bridge_lasterr<T>(self, opts: &FsOptions) -> cross::BridgeResult<T> {
+        let noun = self.bridge_err();
+        self._err(opts)
+            .map_err(|e| cross::BridgeError::sys_call(noun, e))
     }
     
     pub(crate) fn lasterr_unsupported_ok(self, opts: &FsOptions) -> io::Result<()> {
         self.lasterr_unsupported_ok_if(true, opts)
     }
     
+    pub(crate) fn bridge_lasterr_unsupported_ok_if(self, unsupported_ok: bool, opts: &FsOptions) -> cross::BridgeResult<()> {
+        let noun = self.bridge_err();
+        self.lasterr_unsupported_ok_if(unsupported_ok, opts)
+            .map_err(|e| cross::BridgeError::sys_call(noun, e))
+    }
+        
     pub(crate) fn lasterr_unsupported_ok_if(self, unsupported_ok: bool, opts: &FsOptions) -> io::Result<()> {
         let err = io::Error::last_os_error();
         return match err.raw_os_error() {

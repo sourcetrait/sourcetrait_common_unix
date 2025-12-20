@@ -1,10 +1,10 @@
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, snafu::Snafu)]
+#[derive(Debug, snafu::Snafu)]
 pub enum CstdError {
     NotFound { noun: CstdEr },
     String,
-    SysCall { noun: CstdEr },
+    SysCall { source: std::io::Error, noun: CstdEr },
 }
 
 pub type CstdResult<T> = Result<T, CstdError>;
@@ -25,12 +25,12 @@ impl CstdError {
         Err(Self::not_found(noun))
     }
     
-    pub fn sys_call(noun: CstdEr) -> Self {
-        Self::SysCall { noun }
+    pub fn sys_call(source: io::Error, noun: CstdEr) -> Self {
+        Self::SysCall { source, noun }
     }
     
-    pub fn err_sys_call<T>(noun: CstdEr) -> CstdResult<T> {
-        Err(Self::sys_call(noun))
+    pub fn err_sys_call<T>(source: io::Error, noun: CstdEr) -> CstdResult<T> {
+        Err(Self::sys_call(source, noun))
     }
 }
 

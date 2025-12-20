@@ -5,7 +5,7 @@ impl From<CstdError> for cross::BridgeError {
         match e {
             CstdError::NotFound { noun } => Self::NotFound { noun: noun.into() },
             CstdError::String => Self::String,
-            CstdError::SysCall { noun } => Self::SysCall { noun: noun.into() },
+            CstdError::SysCall { source, noun } => Self::SysCall { source, noun: noun.into() },
         }
     }
 }

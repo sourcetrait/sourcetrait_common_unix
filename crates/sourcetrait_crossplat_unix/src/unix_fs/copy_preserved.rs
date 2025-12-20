@@ -278,30 +278,6 @@ fn copy_xattrs(src: &CStr, dst: &CStr, opts: &FsOptions) -> io::Result<()> {
     Ok(())
 }
 
-/// Describes an IO error that was either cleanly recovered from or not.
-/// A clean recovery removed any file that was created.
-/// A dirty recovery failed to remove any file that was created. 
-#[derive(Debug, snafu::Snafu)]
-pub enum CopyError {
-    Clean {
-        src: PathBuf,
-        dst: PathBuf,
-        source: io::Error
-    },
-    Dirty {
-        src: PathBuf,
-        dst: PathBuf,
-        source: io::Error,
-        recover_source: io::Error,
-    }
-}
-
-impl CopyError {
-    fn clean<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2, source: io::Error) -> Self {
-        Self::Clean { src: src.as_ref().into(), dst: dst.as_ref().into(), source }
-    }
-}
-
 fn recover<P1: AsRef<Path>, P2: AsRef<Path>>(src: P1, dst: P2, source: io::Error) -> CopyError {
     let src = src.as_ref().to_path_buf();
     let dst = dst.as_ref().to_path_buf();

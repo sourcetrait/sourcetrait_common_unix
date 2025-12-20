@@ -8,7 +8,8 @@ pub fn cstd_lookup_hostname() -> CstdResult<String> {
     let hostname = unsafe {
         let err = libc::gethostname(buf_ptr, BUF_SIZE);
         if err != 0 {
-            return CstdError::err_sys_call(CstdEr::Hostname);
+            let err = io::Error::last_os_error();
+            return CstdError::err_sys_call(err, CstdEr::Hostname);
         }
         
         CStr::from_ptr(buf_ptr)
