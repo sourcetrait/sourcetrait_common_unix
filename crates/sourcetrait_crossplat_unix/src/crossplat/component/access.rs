@@ -11,24 +11,24 @@ impl cross::AccessComponentLookup for UnixAccessComponentLookup {
     };
 }
 
-fn lookup_user_fn(query: cross::AccesKeyRef<'_>) -> cross::BridgeResult<Option<cross::User>> {
+fn lookup_user_fn(query: cross::AccessKeyRef<'_>) -> cross::BridgeResult<Option<cross::User>> {
     let user = match query {
-        cross::AccesKeyRef::Name(name) => cstd_lookup_username(name)?,
-        cross::AccesKeyRef::UnixID(id) => cstd_lookup_user(id)?,
-        cross::AccesKeyRef::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
-        cross::AccesKeyRef::WindowsSID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
+        cross::AccessKeyRef::Name(name) => cstd_lookup_username(name)?,
+        cross::AccessKeyRef::UnixID(id) => cstd_lookup_user(id)?,
+        cross::AccessKeyRef::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
+        cross::AccessKeyRef::WindowsSID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
     };
     
     let user = user.map(cross::User::from);
     Ok(user)
 }
 
-fn lookup_group_fn(query: cross::AccesKeyRef) -> cross::BridgeResult<Option<cross::UserGroup>> {
+fn lookup_group_fn(query: cross::AccessKeyRef) -> cross::BridgeResult<Option<cross::UserGroup>> {
     let group = match query {
-        cross::AccesKeyRef::Name(name) => cstd_lookup_groupname(name)?,
-        cross::AccesKeyRef::UnixID(id) => cstd_lookup_group(id)?,
-        cross::AccesKeyRef::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
-        cross::AccesKeyRef::WindowsSID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
+        cross::AccessKeyRef::Name(name) => cstd_lookup_groupname(name)?,
+        cross::AccessKeyRef::UnixID(id) => cstd_lookup_group(id)?,
+        cross::AccessKeyRef::QualifiedName(_, _) => cross::BridgeError::err_incapable(cross::Capability::QualifiedAccessNames)?,
+        cross::AccessKeyRef::WindowsSID(_) => cross::BridgeError::err_incapable(cross::Capability::WindowsSIDs)?,
     };
     
     let group = group.map(cross::UserGroup::from);
