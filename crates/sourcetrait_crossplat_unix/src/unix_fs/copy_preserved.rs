@@ -89,7 +89,7 @@ fn chmod(path: &CStr, meta: &fs::Metadata, opts: &FsOptions) -> io::Result<()> {
         libc::fchmodat(
             libc::AT_FDCWD,
             path.as_ptr(),
-            meta.mode(),
+            meta.mode() as libc::mode_t,
             flags,
         )
     };
@@ -249,14 +249,14 @@ fn copy_xattrs(src: &CStr, dst: &CStr, opts: &FsOptions) -> io::Result<()> {
         
         let code = unsafe {
             match opts.follow_symlinks {
-                true => libc::setxattr(
+                true => cstd_across_setxattr(
                     dst.as_ptr(),
                     name.as_ptr(),
                     value.as_ptr() as *const libc::c_void,
                     value.len(),
                     0,
                 ),
-                false => libc::lsetxattr(
+                false => cstd_across_lsetxattr(
                     dst.as_ptr(),
                     name.as_ptr(),
                     value.as_ptr() as *const libc::c_void,

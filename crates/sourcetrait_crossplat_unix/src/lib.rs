@@ -11,6 +11,7 @@ pub(crate) mod crossplat {
     pub(crate) mod model;
 }
 pub(crate) mod cstd {
+    pub(crate) mod across; // re-exports itself
     pub(crate) mod error;
     pub(crate) mod model;
     pub(crate) mod lookup {
@@ -40,6 +41,7 @@ pub use crate::{
         consts::*,
     },
     cstd::{
+        across::*, // re-exports itself
         error::*,
         lookup::{
             usergroup::*,
