@@ -57,7 +57,7 @@ where
         libc::fchmodat(
             libc::AT_FDCWD,
             dst_cstr.as_ptr(),
-            mode,
+            mode as libc::mode_t,
             flags,
         )
     };

@@ -141,19 +141,19 @@ fn set_timestamps(dst: &CStr, meta: &fs::Metadata, opts: &FsOptions) -> io::Resu
 fn copy_xattrs(src: &CStr, dst: &CStr, opts: &FsOptions) -> io::Result<()> {
     let code = unsafe {
         match opts.follow_symlinks {
-            true => libc::listxattr(
+            true => cstd_across_listxattr(
                 src.as_ptr(),
                 ptr::null_mut(),
                 0,
             ),
-            false => libc::llistxattr(
+            false => cstd_across_llistxattr(
                 src.as_ptr(),
                 ptr::null_mut(),
                 0,
             ),
         }
     };
-        
+    
     let size = match code {
         n if n > 0 => n,
         0 => return Ok(()),
@@ -161,22 +161,22 @@ fn copy_xattrs(src: &CStr, dst: &CStr, opts: &FsOptions) -> io::Result<()> {
         _ => return Er::listxattr.err_unknown(&opts),
     };
         
-    let mut list = vec![0u8; size as usize];
+    let mut list = vec![0u8; size as libc::size_t];
     let code = unsafe {
         match opts.follow_symlinks {
-            true => libc::listxattr(
+            true => cstd_across_listxattr(
                 src.as_ptr(),
-                list.as_mut_ptr() as *mut i8,
-                size as usize,
+                list.as_mut_ptr() as *mut libc::c_char,
+                size as libc::size_t,
             ),
-            false => libc::llistxattr(
+            false => cstd_across_llistxattr(
                 src.as_ptr(),
-                list.as_mut_ptr() as *mut i8,
-                size as usize,
+                list.as_mut_ptr() as *mut libc::c_char,
+                size as libc::size_t,
             ),
         }
     };
-        
+
     match code {
         0 => return Ok(()),
         -1 => return Er::listxattr.lasterr(opts),
@@ -202,13 +202,13 @@ fn copy_xattrs(src: &CStr, dst: &CStr, opts: &FsOptions) -> io::Result<()> {
         
         let code = unsafe {
             match opts.follow_symlinks {
-                true => libc::getxattr(
+                true => cstd_across_getxattr(
                     src.as_ptr(),
                     name.as_ptr(),
                     ptr::null_mut(),
                     0,
                 ),
-                false => libc::lgetxattr(
+                false => cstd_across_lgetxattr(
                     src.as_ptr(),
                     name.as_ptr(),
                     ptr::null_mut(),
@@ -223,20 +223,20 @@ fn copy_xattrs(src: &CStr, dst: &CStr, opts: &FsOptions) -> io::Result<()> {
             _ => return Er::getxattr.err_unknown(&opts),
         };
         
-        let mut value = vec![0u8; value_size as usize];
+        let mut value = vec![0u8; value_size as libc::size_t];
         let code = unsafe {
             match opts.follow_symlinks {
-                true => libc::getxattr(
+                true => cstd_across_getxattr(
                     src.as_ptr(),
                     name.as_ptr(),
                     value.as_mut_ptr() as *mut libc::c_void,
-                    value_size as usize,
+                    value_size as libc::size_t,
                 ),
-                false => libc::lgetxattr(
+                false => cstd_across_lgetxattr(
                     src.as_ptr(),
                     name.as_ptr(),
                     value.as_mut_ptr() as *mut libc::c_void,
-                    value_size as usize,
+                    value_size as libc::size_t,
                 ),
             }
         };

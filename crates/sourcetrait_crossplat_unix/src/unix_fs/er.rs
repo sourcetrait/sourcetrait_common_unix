@@ -118,7 +118,7 @@ impl Er {
     pub(crate) fn lasterr_nodata_ok_if<T>(self, nodata_ok: bool, opts: &FsOptions) -> io::Result<Option<T>> {
         let err = io::Error::last_os_error();
         return match err.raw_os_error() {
-            Some(libc::ENODATA) if nodata_ok => Ok(None),
+            Some(e) if nodata_ok && across_e_no_data(e) => Ok(None),
             Some(_) => Err(err),
             None => self.err_unknown(opts),
         }

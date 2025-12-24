@@ -10,13 +10,13 @@ pub fn get_extended_attribute<P: AsRef<Path>, S: AsRef<str>>(src: P, name: S, op
     
     let code = unsafe {
         match opts.follow_symlinks {
-            true => libc::getxattr(
+            true => cstd_across_getxattr(
                 src_cstr.as_ptr(),
                 name_cstr.as_ptr(),
                 ptr::null_mut(),
                 0,
             ),
-            false => libc::lgetxattr(
+            false => cstd_across_lgetxattr(
                 src_cstr.as_ptr(),
                 name_cstr.as_ptr(),
                 ptr::null_mut(),
@@ -32,20 +32,20 @@ pub fn get_extended_attribute<P: AsRef<Path>, S: AsRef<str>>(src: P, name: S, op
         _ => return Er::getxattr.err_unknown(&opts),
     };
     
-    let mut value = vec![0u8; value_size as usize + 1];
+    let mut value = vec![0u8; value_size as libc::size_t + 1];
     let code = unsafe {
         match opts.follow_symlinks {
-            true => libc::getxattr(
+            true => cstd_across_getxattr(
                 src_cstr.as_ptr(),
                 name_cstr.as_ptr(),
                 value.as_mut_ptr() as *mut libc::c_void,
-                value_size as usize,
+                value_size as libc::size_t,
             ),
-            false => libc::lgetxattr(
+            false => cstd_across_lgetxattr(
                 src_cstr.as_ptr(),
                 name_cstr.as_ptr(),
                 value.as_mut_ptr() as *mut libc::c_void,
-                value_size as usize,
+                value_size as libc::size_t,
             ),
         }
     };
@@ -77,14 +77,14 @@ pub fn set_extended_attribute<P: AsRef<Path>, S1: AsRef<str>, S2: AsRef<str>>(ds
 
     let code = unsafe {
         match opts.follow_symlinks {
-            true => libc::setxattr(
+            true => cstd_across_setxattr(
                 dst_cstr.as_ptr(),
                 name_cstr.as_ptr(),
                 value_cstr.as_ptr() as *const libc::c_void,
                 value.len(),
                 0,
             ),
-            false => libc::lsetxattr(
+            false => cstd_across_lsetxattr(
                 dst_cstr.as_ptr(),
                 name_cstr.as_ptr(),
                 value_cstr.as_ptr() as *const libc::c_void,
