@@ -9,6 +9,7 @@ impl From<UserCstd> for cross::User {
                 id: cross::Capable::Capable(u.uid),
                 sid: cross::Capable::Incapable(cross::WindowsSIDsCapable),
             },
+            primary_group_id: Capable::Capable(cross::AccessId::UnixID(u.primary_gid)),
         }
     }
 }

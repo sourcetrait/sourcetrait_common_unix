@@ -3,9 +3,11 @@ use crate::*;
 fn user_from_passwd(user_ptr: *mut libc::passwd) -> CstdResult<UserCstd> {
     let username;
     let uid;
+    let primary_gid;
     unsafe {
         username = CStr::from_ptr((*user_ptr).pw_name);
         uid = (*user_ptr).pw_uid;
+        primary_gid = (*user_ptr).pw_gid;
     }
     
     let username = TwoString::try_from_ffi_cstr(username)?;
@@ -13,6 +15,7 @@ fn user_from_passwd(user_ptr: *mut libc::passwd) -> CstdResult<UserCstd> {
     Ok(UserCstd {
         username,
         uid,
+        primary_gid,
     })
 }
 

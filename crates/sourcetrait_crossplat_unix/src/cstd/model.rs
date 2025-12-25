@@ -4,6 +4,7 @@ use crate::*;
 pub struct UserCstd {
     pub username: TwoString,
     pub uid: UID,
+    pub primary_gid: GID,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
